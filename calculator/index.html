@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SIP, SWP & Loan Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0b1220; --muted:#98a2b3; --text:#e6eaf2; --accent:#4f46e5; --danger:#ef4444; --border:#1e2a45; }
+    * { box-sizing:border-box; }
+    html,body { min-height:100%; }
+    body { margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; background:radial-gradient(1200px 800px at 80% -10%,#1a2452 0%,transparent 60%),radial-gradient(1000px 600px at -10% 10%,#123154 0%,transparent 60%),var(--bg); color:var(--text); }
+    .container { max-width:1120px; margin:0 auto; padding:32px 16px 64px; }
+    header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:20px; }
+    h1 { font-size:28px; margin:0; }
+    .note,.hint { color:var(--muted); font-size:12px; }
+    .grid { display:grid; grid-template-columns:1fr; gap:16px; }
+    @media (min-width:900px) { .grid { grid-template-columns:360px 1fr; align-items:start; } }
+    .card { background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02)); border:1px solid var(--border); border-radius:14px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .form,.panel { display:grid; gap:14px; }
+    .field { display:grid; gap:6px; }
+    label { font-weight:600; font-size:14px; }
+    .input { display:flex; align-items:center; gap:8px; background:#0f1528; border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+    .prefix,.suffix { color:var(--muted); font-weight:600; }
+    input[type="number"] { width:100%; min-width:0; background:transparent; border:0; outline:none; color:var(--text); font-size:15px; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
+    button { border:0; padding:10px 14px; border-radius:10px; font-weight:600; cursor:pointer; color:var(--text); }
+    .primary { background:var(--accent); color:#fff; }
+    .ghost { background:transparent; border:1px solid var(--border); }
+    .results { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    @media(max-width:640px){ .results { grid-template-columns:1fr; } }
+    .metric { background:#0f1528; border:1px solid var(--border); border-radius:12px; padding:14px; }
+    .metric .label { color:var(--muted); font-size:12px; }
+    .metric .value { font-size:20px; font-weight:700; margin-top:6px; }
+    .metric .sub { font-size:12px; color:var(--muted); margin-top:3px; }
+    .table-wrap { overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0f1528; }
+    table { width:100%; border-collapse:collapse; min-width:760px; }
+    th,td { text-align:right; padding:10px 12px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums lining-nums; white-space:nowrap; }
+    th:first-child,td:first-child { text-align:left; }
+    thead th { position:sticky; top:0; z-index:1; background:#0f1528; color:var(--muted); font-size:13px; }
+    tbody tr:hover { background:rgba(255,255,255,.025); }
+    .total-row { background:rgba(79,70,229,.18); font-weight:700; }
+    .total-row:hover { background:rgba(79,70,229,.25); }
+    .error { display:none; color:var(--danger); font-size:12px; }
+    .swp-extra { display:none; }
+    .swp-extra.active { display:grid; }
+    .loan-note { display:none; border:1px solid #344268; border-radius:10px; background:rgba(79,70,229,.09); padding:10px; line-height:1.45; }
+    .loan-note.active { display:block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SIP, SWP & Loan Calculator</h1>
+      <div class="note">INR • Loan mode uses fixed monthly principal and reducing-balance interest</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <form id="calculator-form" class="form" novalidate>
+          <div class="field">
+            <label>Calculation Type</label>
+            <div class="input" style="padding:8px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="mode" value="sip" checked><span class="hint">Monthly SIP</span></label></div>
+            <div class="input" style="padding:8px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="mode" value="lump"><span class="hint">Lump Sum</span></label></div>
+            <div class="input" style="padding:8px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="mode" value="swp-monthly"><span class="hint">SWP (Monthly)</span></label></div>
+            <div class="input" style="padding:8px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="mode" value="swp-yearly"><span class="hint">SWP (Yearly)</span></label></div>
+            <div class="input" style="padding:8px 12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="radio" name="mode" value="loan-fixed-principal"><span class="hint">Loan: Fixed Principal Monthly</span></label></div>
+          </div>
+
+          <div class="field">
+            <label id="amount-label" for="amount">Monthly Investment</label>
+            <div class="input"><span class="prefix">₹</span><input id="amount" type="number" min="0" step="0.0001" placeholder="e.g. 10000" required></div>
+            <div class="hint" id="amount-hint">How much you invest every month</div>
+            <div class="error" id="err-amount">Enter a positive amount</div>
+          </div>
+
+          <div class="field">
+            <label for="rate">Annual Interest Rate</label>
+            <div class="input"><input id="rate" type="number" min="0" max="100" step="0.0001" placeholder="e.g. 12" required><span class="suffix">%</span></div>
+            <div class="hint" id="rate-hint">Expected annual return</div>
+            <div class="error" id="err-rate">Enter a rate between 0 and 100</div>
+          </div>
+
+          <div class="field">
+            <label for="years">Time Period</label>
+            <div class="input"><input id="years" type="number" min="1" max="60" step="1" placeholder="e.g. 20" required><span class="suffix">years</span></div>
+            <div class="hint" id="years-hint">Investment duration in years</div>
+            <div class="error" id="err-years">Enter whole years between 1 and 60</div>
+          </div>
+
+          <div class="field swp-extra" id="withdrawal-field">
+            <label for="withdrawal">Withdrawal Amount</label>
+            <div class="input"><span class="prefix">₹</span><input id="withdrawal" type="number" min="0" step="0.0001"></div>
+            <div class="hint" id="withdrawal-hint"></div>
+            <div class="error" id="err-withdrawal">Enter a valid withdrawal amount</div>
+          </div>
+
+          <div class="loan-note" id="loan-note">
+            <strong>Automatic principal:</strong> Loan Amount ÷ (Years × 12).<br>
+            Each month, interest is calculated on the opening loan balance and the fixed calculated principal is deducted.
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="primary">Calculate</button>
+            <button type="button" id="reset" class="ghost">Reset</button>
+          </div>
+          <div class="hint" id="example-hint">Example: ₹1,000/month, 15% p.a., 20 years.</div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="results" aria-live="polite">
+          <div class="metric"><div class="label" id="metric-one-label">Total Invested</div><div class="value" id="metric-one">₹0.0000</div><div class="sub" id="metric-one-sub">—</div></div>
+          <div class="metric"><div class="label" id="metric-two-label">Total Interest</div><div class="value" id="metric-two">₹0.0000</div><div class="sub" id="metric-two-sub">—</div></div>
+          <div class="metric"><div class="label" id="metric-three-label">Final Amount</div><div class="value" id="metric-three">₹0.0000</div><div class="sub" id="metric-three-sub">—</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="table-head"></tr></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const currency4 = new Intl.NumberFormat('en-IN', {
+      style: 'currency', currency: 'INR', minimumFractionDigits: 4, maximumFractionDigits: 4
+    });
+    const fmt = value => currency4.format(Math.abs(value) < 0.00000001 ? 0 : value);
+    const $ = id => document.getElementById(id);
+
+    const el = {
+      form: $('calculator-form'), amount: $('amount'), rate: $('rate'), years: $('years'), withdrawal: $('withdrawal'),
+      amountLabel: $('amount-label'), amountHint: $('amount-hint'), rateHint: $('rate-hint'), yearsHint: $('years-hint'),
+      withdrawalField: $('withdrawal-field'), withdrawalHint: $('withdrawal-hint'), loanNote: $('loan-note'), exampleHint: $('example-hint'),
+      oneLabel: $('metric-one-label'), one: $('metric-one'), oneSub: $('metric-one-sub'),
+      twoLabel: $('metric-two-label'), two: $('metric-two'), twoSub: $('metric-two-sub'),
+      threeLabel: $('metric-three-label'), three: $('metric-three'), threeSub: $('metric-three-sub'),
+      tableHead: $('table-head'), tableBody: $('table-body'), reset: $('reset'),
+      errAmount: $('err-amount'), errRate: $('err-rate'), errYears: $('err-years'), errWithdrawal: $('err-withdrawal'),
+      mode: () => document.querySelector('input[name="mode"]:checked').value
+    };
+
+    function show(node, visible) { node.style.display = visible ? 'block' : 'none'; }
+
+    function modeConfig(mode) {
+      if (mode === 'loan-fixed-principal') {
+        return {
+          label: 'Loan Amount', amountHint: 'Original amount borrowed', amountPlaceholder: 'e.g. 1000000',
+          rateHint: 'Annual loan interest rate', yearsHint: 'Loan duration in years',
+          example: 'Example: ₹10,00,000 loan, 10% p.a., 10 years. Principal is calculated automatically as ₹8,333.3333/month.',
+          loan: true, swp: false
+        };
+      }
+      if (mode === 'lump') {
+        return { label: 'Lump Sum Investment', amountHint: 'How much you invest one time', amountPlaceholder: 'e.g. 1000000', rateHint: 'Expected annual return', yearsHint: 'Investment duration in years', example: 'Example: ₹10,00,000 lump sum, 15% p.a., 20 years.', loan: false, swp: false };
+      }
+      if (mode === 'swp-monthly') {
+        return { label: 'Initial Corpus', amountHint: 'Starting lump sum capital for SWP', amountPlaceholder: 'e.g. 20000000', rateHint: 'Expected annual return', yearsHint: 'SWP duration in years', example: 'Example: ₹2,00,00,000 corpus, 12% p.a., withdraw ₹1,00,000/month.', loan: false, swp: true, withdrawalHint: 'Monthly withdrawal amount', withdrawalPlaceholder: 'e.g. 100000' };
+      }
+      if (mode === 'swp-yearly') {
+        return { label: 'Initial Corpus', amountHint: 'Starting lump sum capital for SWP', amountPlaceholder: 'e.g. 20000000', rateHint: 'Expected annual return', yearsHint: 'SWP duration in years', example: 'Example: ₹2,00,00,000 corpus, 10% p.a., withdraw ₹12,00,000/year.', loan: false, swp: true, withdrawalHint: 'Annual withdrawal amount', withdrawalPlaceholder: 'e.g. 1200000' };
+      }
+      return { label: 'Monthly Investment', amountHint: 'How much you invest every month', amountPlaceholder: 'e.g. 10000', rateHint: 'Expected annual return', yearsHint: 'Investment duration in years', example: 'Example: ₹1,000/month, 15% p.a., 20 years.', loan: false, swp: false };
+    }
+
+    function syncModeUI() {
+      const c = modeConfig(el.mode());
+      el.amountLabel.textContent = c.label;
+      el.amountHint.textContent = c.amountHint;
+      el.amount.placeholder = c.amountPlaceholder;
+      el.rateHint.textContent = c.rateHint;
+      el.yearsHint.textContent = c.yearsHint;
+      el.exampleHint.textContent = c.example;
+      el.withdrawalField.classList.toggle('active', c.swp);
+      el.loanNote.classList.toggle('active', c.loan);
+      if (c.swp) {
+        el.withdrawalHint.textContent = c.withdrawalHint;
+        el.withdrawal.placeholder = c.withdrawalPlaceholder;
+      }
+      [el.errAmount, el.errRate, el.errYears, el.errWithdrawal].forEach(x => show(x, false));
+    }
+
+    function validate() {
+      const amount = Number(el.amount.value);
+      const rate = Number(el.rate.value);
+      const years = Number(el.years.value);
+      const withdrawal = Number(el.withdrawal.value || 0);
+      const mode = el.mode();
+      let ok = true;
+
+      show(el.errAmount, !(amount > 0));
+      if (!(amount > 0)) ok = false;
+      show(el.errRate, !(rate >= 0 && rate <= 100));
+      if (!(rate >= 0 && rate <= 100)) ok = false;
+      show(el.errYears, !(Number.isInteger(years) && years >= 1 && years <= 60));
+      if (!(Number.isInteger(years) && years >= 1 && years <= 60)) ok = false;
+
+      const isSwp = mode === 'swp-monthly' || mode === 'swp-yearly';
+      show(el.errWithdrawal, isSwp && !(withdrawal >= 0));
+      if (isSwp && !(withdrawal >= 0)) ok = false;
+
+      return ok ? { amount, rate, years, withdrawal } : null;
+    }
+
+    // Loan logic: fixed principal is calculated automatically.
+    // Example: 10,00,000 / (10 * 12) = 8,333.3333 per month.
+    function calculateFixedPrincipalLoan(loanAmount, annualRatePct, years) {
+      const months = years * 12;
+      const monthlyRate = annualRatePct / 1200;
+      const fixedPrincipal = loanAmount / months;
+      let balance = loanAmount;
+      let totalInterest = 0;
+      let totalPaid = 0;
+      const rows = [];
+
+      for (let month = 1; month <= months; month++) {
+        const opening = balance;
+        const interest = opening * monthlyRate;
+        const principal = month === months ? opening : fixedPrincipal;
+        const payment = principal + interest;
+        balance = Math.max(0, opening - principal);
+        totalInterest += interest;
+        totalPaid += payment;
+        rows.push({ month, opening, interest, principal, payment, balance });
+      }
+
+      return { months, monthlyRate, fixedPrincipal, totalInterest, totalPaid, rows };
+    }
+
+    function calculateSip(amount, ratePct, years) {
+      const rate = ratePct / 100;
+      const annual = amount * 12;
+      const rows = [];
+      let balance = 0;
+      for (let year = 1; year <= years; year++) {
+        const invested = annual * year;
+        const beforeInterest = balance + annual;
+        const interest = beforeInterest * rate;
+        balance = beforeInterest + interest;
+        rows.push({ year, invested, interest, balance });
+      }
+      return { invested: annual * years, interest: balance - annual * years, final: balance, rows };
+    }
+
+    function calculateLump(amount, ratePct, years) {
+      const rate = ratePct / 100;
+      const rows = [];
+      for (let year = 1; year <= years; year++) {
+        const balance = amount * Math.pow(1 + rate, year);
+        const previous = year === 1 ? amount : amount * Math.pow(1 + rate, year - 1);
+        rows.push({ year, invested: amount, interest: balance - previous, balance });
+      }
+      const final = amount * Math.pow(1 + rate, years);
+      return { invested: amount, interest: final - amount, final, rows };
+    }
+
+    function calculateSwp(amount, ratePct, years, withdrawal, isMonthly) {
+      const periods = isMonthly ? years * 12 : years;
+      const rate = isMonthly ? ratePct / 1200 : ratePct / 100;
+      const group = isMonthly ? 12 : 1;
+      const rows = [];
+      let balance = amount;
+      let totalInterest = 0;
+      let totalWithdrawn = 0;
+      let groupOpening = balance;
+      let groupInterest = 0;
+
+      for (let period = 1; period <= periods; period++) {
+        const interest = balance * rate;
+        const available = balance + interest;
+        const paid = Math.min(withdrawal, available);
+        balance = available - paid;
+        totalInterest += interest;
+        totalWithdrawn += paid;
+        groupInterest += interest;
+
+        if (period % group === 0) {
+          rows.push({ year: period / group, invested: groupOpening, interest: groupInterest, balance });
+          groupOpening = balance;
+          groupInterest = 0;
+        }
+      }
+      return { invested: amount, interest: totalInterest, withdrawn: totalWithdrawn, final: balance, rows };
+    }
+
+    function renderLoan(result, loanAmount, ratePct) {
+      el.oneLabel.textContent = 'Loan Amount';
+      el.one.textContent = fmt(loanAmount);
+      el.oneSub.textContent = `${result.months} months • fixed principal ${fmt(result.fixedPrincipal)}/month`;
+
+      el.twoLabel.textContent = 'Total Interest';
+      el.two.textContent = fmt(result.totalInterest);
+      el.twoSub.textContent = `${ratePct.toFixed(4)}% p.a. • ${(ratePct / 12).toFixed(4)}% per month`;
+
+      el.threeLabel.textContent = 'Total Amount Paid';
+      el.three.textContent = fmt(result.totalPaid);
+      el.threeSub.textContent = 'Principal + reducing-balance interest';
+
+      el.tableHead.innerHTML = '<th>Month</th><th>Opening Loan</th><th>Interest</th><th>Fixed Principal</th><th>Total Payment</th><th>Remaining Loan</th>';
+      const dataRows = result.rows.map(r => `
+        <tr>
+          <td>${r.month}</td>
+          <td>${fmt(r.opening)}</td>
+          <td>${fmt(r.interest)}</td>
+          <td>${fmt(r.principal)}</td>
+          <td>${fmt(r.payment)}</td>
+          <td>${fmt(r.balance)}</td>
+        </tr>
+      `).join('');
+
+      // Final row: interest accumulated from Month 1 through the final month.
+      const totalRow = `
+        <tr class="total-row">
+          <td>Total</td>
+          <td>—</td>
+          <td>${fmt(result.totalInterest)}</td>
+          <td>${fmt(loanAmount)}</td>
+          <td>${fmt(result.totalPaid)}</td>
+          <td>${fmt(0)}</td>
+        </tr>
+      `;
+      el.tableBody.innerHTML = dataRows + totalRow;
+    }
+
+    function renderStandard(result, mode, ratePct, withdrawal) {
+      el.oneLabel.textContent = mode.startsWith('swp') ? 'Initial Corpus' : 'Total Invested';
+      el.one.textContent = fmt(result.invested);
+      el.oneSub.textContent = 'Calculated for selected duration';
+
+      if (mode.startsWith('swp')) {
+        el.twoLabel.textContent = 'Total Withdrawn';
+        el.two.textContent = fmt(result.withdrawn);
+        el.twoSub.textContent = mode === 'swp-monthly' ? `${fmt(withdrawal)}/month` : `${fmt(withdrawal)}/year`;
+      } else {
+        el.twoLabel.textContent = 'Total Interest';
+        el.two.textContent = fmt(result.interest);
+        el.twoSub.textContent = `${ratePct.toFixed(4)}% p.a.`;
+      }
+
+      el.threeLabel.textContent = 'Final Amount';
+      el.three.textContent = fmt(result.final);
+      el.threeSub.textContent = 'Closing balance';
+
+      el.tableHead.innerHTML = '<th>Year</th><th>Invested / Opening</th><th>Interest</th><th>Year-End Balance</th>';
+      el.tableBody.innerHTML = result.rows.map(r => `
+        <tr>
+          <td>Year ${r.year}</td>
+          <td>${fmt(r.invested)}</td>
+          <td>${fmt(r.interest)}</td>
+          <td>${fmt(r.balance)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function calculateAndRender() {
+      const values = validate();
+      if (!values) return;
+      const mode = el.mode();
+
+      if (mode === 'loan-fixed-principal') {
+        const result = calculateFixedPrincipalLoan(values.amount, values.rate, values.years);
+        renderLoan(result, values.amount, values.rate);
+        return;
+      }
+
+      const result = mode === 'lump'
+        ? calculateLump(values.amount, values.rate, values.years)
+        : mode === 'swp-monthly'
+          ? calculateSwp(values.amount, values.rate, values.years, values.withdrawal, true)
+          : mode === 'swp-yearly'
+            ? calculateSwp(values.amount, values.rate, values.years, values.withdrawal, false)
+            : calculateSip(values.amount, values.rate, values.years);
+
+      renderStandard(result, mode, values.rate, values.withdrawal);
+    }
+
+    el.form.addEventListener('submit', event => {
+      event.preventDefault();
+      calculateAndRender();
+    });
+
+    el.reset.addEventListener('click', () => {
+      el.form.reset();
+      syncModeUI();
+      el.oneLabel.textContent = 'Total Invested';
+      el.twoLabel.textContent = 'Total Interest';
+      el.threeLabel.textContent = 'Final Amount';
+      [el.one, el.two, el.three].forEach(node => node.textContent = '₹0.0000');
+      [el.oneSub, el.twoSub, el.threeSub].forEach(node => node.textContent = '—');
+      el.tableHead.innerHTML = '<th>Year</th><th>Invested / Opening</th><th>Interest</th><th>Year-End Balance</th>';
+      el.tableBody.innerHTML = '';
+    });
+
+    document.addEventListener('change', event => {
+      if (event.target && event.target.name === 'mode') syncModeUI();
+    });
+
+    syncModeUI();
+  </script>
+</body>
+</html>
